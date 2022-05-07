@@ -11,7 +11,7 @@ jobs:
     - name: Deploy code to Lambda
       uses: qubitro/action-lambda-python-zip@v1.0
       with:
-        lambda_layer_arn: 'arn:aws:lambda:us-east-1:342648211424:layer:nyartcc_teamspeakbot'
+        lambda_layer_arn: 'arn:aws:lambda:us-east-1:342648211424:layer:nyartcc_teamspeak2'
         lambda_function_name: 'znyTeamspeakBot'
         lambda_region: 'us-east-1'
       env:
