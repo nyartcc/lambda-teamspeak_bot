@@ -1,0 +1,19 @@
+on:
+  push:
+    branches:
+      - master
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@master
+    - name: Deploy code to Lambda
+      uses: qubitro/action-lambda-python-zip@v1.0
+      with:
+        lambda_layer_arn: 'arn:aws:lambda:us-east-1:342648211424:layer:nyartcc_teamspeakbot'
+        lambda_function_name: 'znyTeamspeakBot'
+        lambda_region: 'us-east-1'
+      env:
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
