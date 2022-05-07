@@ -9,7 +9,6 @@ from sqlalchemy import select, and_, exists, insert, update
 from sqlalchemy.sql import func
 import urllib.parse
 
-
 # BEFORE YOU JUDGE THIS SCRIPT... I wrote it while drinking, i swear....
 
 def lambda_handler(event, context):
