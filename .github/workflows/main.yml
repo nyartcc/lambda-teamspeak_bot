@@ -7,7 +7,7 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-    - uses: actions/checkout@master
+    - uses: actions/checkout@main
     - name: Deploy code to Lambda
       uses: qubitro/action-lambda-python-zip@v1.0
       with:
