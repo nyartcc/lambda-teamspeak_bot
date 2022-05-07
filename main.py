@@ -26,7 +26,7 @@ def lambda_handler(event, context):
     meta = MetaData(engine, reflect=True)
     table = meta.tables['callsigns']
     table2 = meta.tables['online']
-    table3 = meta.tables['users']
+    table3 = meta.tables['controller']
     ts_ids = meta.tables['ts_user']
     ts_MessageLog = meta.tables['ts_message_log']
     def updatePos(ts3conn):
