@@ -44,8 +44,6 @@ table3 = meta.tables["controllers"]
 ts_ids = meta.tables["ts_user"]
 ts_MessageLog = meta.tables["ts_message_log"]
 
-# Set a static IP address of the ZNY-Website-Production EC2 instance in case the function fails to get it
-ZNY_WEB_SERVER_IP = os.environ["ZNY_WEB_SERVER_IP"]
 
 
 def incrementUpdateCount():
@@ -69,43 +67,8 @@ def timeout_handler(signum, frame):
 signal.signal(signal.SIGALRM, timeout_handler)
 
 
-def static_zny_web_ip():
-    return ZNY_WEB_SERVER_IP
 
-
-def get_zny_web_ip():
-    """
-    Get the IP address of the ZNY-Website-Production EC2 instance.
-    :return: The IP address of the ZNY-Website-Production EC2 instance.
-    """
-    # Use EC2 client
-    ec2 = boto3.client("ec2")
-
-    # Describe instances with a specific tag
-    response = ec2.describe_instances(
-        Filters=[
-            {
-                'Name': 'tag:Name',
-                'Values': ['ZNY-Website-Production']
-            }
-        ]
-    )
-
-    # Check if an instance with the name "ZNY-Website-Production" was found
-    if len(response['Reservations']) > 0:
-        # Get the first instance
-        instance = response['Reservations'][0]['Instances'][0]
-        if DEBUG:
-            print(f"BINGO! Found ZNY-Website-Production with IP {instance['PublicIpAddress']}")
-        return instance['PublicIpAddress']
-    else:
-        if DEBUG:
-            print(f"No instance named ZNY-Website-Production found, returning static: {ZNY_WEB_SERVER_IP}")
-        return ZNY_WEB_SERVER_IP
-
-
-# Make the IP of the ZNY-Website-Production EC2 instance global
-zny_web_instance_ip = static_zny_web_ip()
+zny_web_instance = "https://nyartcc.org"
 
 
 def updatePos(ts3conn, conn):
@@ -127,12 +90,12 @@ def updatePos(ts3conn, conn):
     # Dictionary of all the users currently connected to the TS3 server
     trackedUsers = {}
 
-    positionInfo = requests.get('http://' + zny_web_instance_ip + '/api/positions/online').json()
+    positionInfo = requests.get(zny_web_instance + '/api/positions/online').json()
     for position in positionInfo['data']:
         if position['identifier'] not in onlineController:
             onlineController[position['identifier']] = []
         userInfo = requests.get(
-            'http://' + zny_web_instance_ip + '/api/teamspeak/userIdentity?cid={}'.format(position['cid'])).json()
+            zny_web_instance+ '/api/teamspeak/userIdentity?cid={}'.format(position['cid'])).json()
         for uid in userInfo:
             onlineController[position['identifier']].append(uid)
 
@@ -203,7 +166,7 @@ def updateUsers(ts3conn, conn):
     """
 
     conn = conn
-    zny_web_instance_ip = static_zny_web_ip()
+    
 
     def sendMessageReg(client_unique_identifier, clid):
         # give UID send mmessage to user (DONT RESEND FOR X TIME)
@@ -264,7 +227,7 @@ def updateUsers(ts3conn, conn):
     for ts_id in rawTsIds:
         allTeamspeakIds.append(ts_id["uid"])
 
-    artccInfo = requests.get('http://' + zny_web_instance_ip + '/api/teamspeak/serverinfo').json()
+    artccInfo = requests.get(zny_web_instance + '/api/teamspeak/serverinfo').json()
     groupsTracked = artccInfo['data']['tagsTracked']
 
     for user in resp.parsed:
@@ -279,7 +242,7 @@ def updateUsers(ts3conn, conn):
 
         elif userInfo.parsed[0]["client_unique_identifier"] in allTeamspeakIds:
             userInfoWebsite = requests.get(
-                'http://' + zny_web_instance_ip + '/api/teamspeak/userinfo?uid={}'.format(
+                zny_web_instance + '/api/teamspeak/userinfo?uid={}'.format(
                     urllib.parse.quote_plus(userInfo.parsed[0]['client_unique_identifier']))).json()
             userGroupsTS = userInfo.parsed[0]['client_servergroups'].split(',')
             userGroupsTracked = list(set(groupsTracked) & set(userGroupsTS))
