@@ -1,7 +1,6 @@
 import cProfile
 import json
 import os
-import signal
 import time
 import urllib.parse
 
@@ -67,9 +66,6 @@ class TimeoutException(Exception):
 
 def timeout_handler(signum, frame):
     raise TimeoutException("Timeout handler triggered!")
-
-
-# signal.signal(signal.SIGALRM, timeout_handler)
 
 
 zny_web_instance = "https://nyartcc.org"
@@ -185,8 +181,6 @@ def updateUsers(ts3conn, conn):
     :param conn:   The database connection.
     :return:
     """
-
-    conn = conn
 
     def sendMessageReg(client_unique_identifier, clid):
         """
@@ -357,19 +351,27 @@ def lambda_handler(event, context):
 
     # Get the IP address of the ZNY-Website-Production EC2 instance
     # zny_web_instance_ip = ZNY_WEB_SERVER_IP
-    signal.alarm(15)
 
-    with ts3.query.TS3Connection(tsHostname, "10011") as ts3conn:
-        ts3conn.login(client_login_name=tsUsername, client_login_password=tsPass)
-        ts3conn.use(sid=1)
-        conn = engine.connect()
-        updatePos(ts3conn, conn)
-        updateUsers(ts3conn, conn)
+    try:
+        with ts3.query.TS3Connection(tsHostname, "10011") as ts3conn:
+            ts3conn.login(client_login_name=tsUsername, client_login_password=tsPass)
+            ts3conn.use(sid=1)
+            conn = engine.connect()
+            updatePos(ts3conn, conn)
+            updateUsers(ts3conn, conn)
 
-    return {
-        "statusCode": 200,
-        "headers": {},
-        "body": json.dumps({
-            "message": f"Ran successfully! {updateCount} updates were made. {failCount} failed.",
-        }),
-    }
+        return {
+            "statusCode": 200,
+            "headers": {},
+            "body": json.dumps({
+                "message": f"Ran successfully! {updateCount} updates were made. {failCount} failed.",
+            }),
+        }
+    except Error as e:
+        return {
+            "statusCode": 500,
+            "headers": {},
+            "body": json.dumps({
+                "message": f"Timed out after 15 seconds."
+            }),
+        }
