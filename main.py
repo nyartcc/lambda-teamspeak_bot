@@ -38,7 +38,6 @@ failCount = 0
 
 # TS3 Server Group IDs - Trevor needs to explain this to me
 sourceGroup = 227
-# sourceGroup = 4
 
 # Database connection
 engine = create_engine(db)
@@ -71,7 +70,7 @@ def timeout_handler(signum, frame):
 zny_web_instance = "https://nyartcc.org"
 
 
-def updatePos(ts3conn, conn):
+def updatePos(ts3conn):
     """
     Update the positions of all online controllers.
     :param ts3conn:
@@ -263,14 +262,10 @@ def updateUsers(ts3conn, conn):
 
     for user in resp.parsed:
         logger.info(f"Variable USER is currently: {user}")
-        if user["client_database_id"] == 1:
-            pass
+
         userInfo = ts3conn.clientinfo(clid=user["clid"])
 
-        if userInfo.parsed[0]["client_type"] != "0":
-            pass
-
-        elif userInfo.parsed[0]["client_unique_identifier"] in allTeamspeakIds:
+        if userInfo.parsed[0]["client_unique_identifier"] in allTeamspeakIds:
             userInfoWebsite = requests.get(
                 zny_web_instance + '/api/teamspeak/userinfo?uid={}'.format(
                     urllib.parse.quote_plus(userInfo.parsed[0]['client_unique_identifier']))).json()
@@ -283,12 +278,12 @@ def updateUsers(ts3conn, conn):
             # If user is a board member
             if userInfoWebsite['data']['isBoardMember']:
                 # Don't assign the "NY Controller" tag.
-                logger.info(f"Found a board member!")
+                logger.info("Found a board member!")
                 logger.info(f"userInfoWebsite['data'] is currently: {userInfoWebsite['data']}")
 
                 # Remove the 'NY Controller' tag
                 if '11' in userGroupsWebsite:
-                    logger.info(f"User has id 11 (NY Controller) in list. Removing it.")
+                    logger.info("User has id 11 (NY Controller) in list. Removing it.")
                     try:
                         userGroupsWebsite.remove('11')
                     except error as e:
@@ -298,19 +293,19 @@ def updateUsers(ts3conn, conn):
                 # Add the 'Board Member' tag
                 if '17401' in userGroupsWebsite:
                     userGroupsWebsite.append('17401')
-                    logger.info(f"Sucessfully added id 17401 (Board Member) to user {userInfoWebsite['data']['cid']}")
+                    logger.info(f"Successfully added id 17401 (Board Member) to user {userInfoWebsite['data']['cid']}")
 
                 # Ignore server groups for 'KM'
                 # Check if user is KM and if he has the 'I1' tag if so, remove it and add C3.
                 if '73' in userGroupsWebsite and userInfoWebsite['data']['cid'] == 908962:
-                    logger.info(f"Found user KM and he has id 73. He's a fake I1! Remove it!")
+                    logger.info("Found user KM and he has id 73. He's a fake I1! Remove it!")
                     try:
                         userGroupsWebsite.remove('73')
                     except error as e:
                         logger.info(f"Failed to remove group 73. Error: {e}")
 
                     userGroupsWebsite.append('72')
-                    logger.info(f"Added group 72 instead.")
+                    logger.info("Added group 72 instead.")
 
             userAddGroups = list(set(userGroupsWebsite) - set(userGroupsTracked))
             userRemoveGroups = list(set(userGroupsTracked) - set(userGroupsWebsite))
@@ -320,9 +315,7 @@ def updateUsers(ts3conn, conn):
             for groupId in userAddGroups:
                 ts3conn.servergroupaddclient(sgid=groupId, cldbid=userInfo.parsed[0]['client_database_id'])
                 incrementUpdateCount()
-            # check if user in rating group
-            # check if user is guest of nyartcc and assign
-            pass
+
         else:
             if checkLastMessage(
                     userInfo.parsed[0]["client_unique_identifier"], "reg"
@@ -335,8 +328,7 @@ def updateUsers(ts3conn, conn):
                 sendMessageReg(
                     userInfo.parsed[0]["client_unique_identifier"], user["clid"]
                 )
-            pass
-            # send link to user to register self
+                incrementUpdateCount()
 
 
 def lambda_handler(event, context):
@@ -346,18 +338,13 @@ def lambda_handler(event, context):
     :param context:
     :return:
     """
-    # profiler = cProfile.Profile()
-    # profiler.enable()
-
-    # Get the IP address of the ZNY-Website-Production EC2 instance
-    # zny_web_instance_ip = ZNY_WEB_SERVER_IP
 
     try:
         with ts3.query.TS3Connection(tsHostname, "10011") as ts3conn:
             ts3conn.login(client_login_name=tsUsername, client_login_password=tsPass)
             ts3conn.use(sid=1)
             conn = engine.connect()
-            updatePos(ts3conn, conn)
+            updatePos(ts3conn)
             updateUsers(ts3conn, conn)
 
         return {
@@ -372,6 +359,6 @@ def lambda_handler(event, context):
             "statusCode": 500,
             "headers": {},
             "body": json.dumps({
-                "message": f"Timed out after 15 seconds."
+                "message": f"Epic fail! {e}"
             }),
         }
