@@ -283,9 +283,8 @@ def updateUsers(ts3conn, conn):
             userGroupsTS = userInfo.parsed[0]['client_servergroups'].split(',')
             userGroupsTracked = list(set(groupsTracked) & set(userGroupsTS))
             userGroupsWebsite = userInfoWebsite['data']['tags']
-            if userInfoWebsite['data']['isStaff']:
-                if '11' in userGroupsWebsite:
-                    userGroupsWebsite.remove('11')
+            if userInfoWebsite['data']['isStaff'] and '11' in userGroupsWebsite:
+                userGroupsWebsite.remove('11')
 
             # If user is a board member
             if userInfoWebsite['data']['isBoardMember']:
@@ -293,8 +292,9 @@ def updateUsers(ts3conn, conn):
                 logger.info(f"Found a board member!")
                 logger.info(f"userInfoWebsite['data'] is currently: {userInfoWebsite['data']}")
 
+                # Remove the 'NY Controller' tag
                 if '11' in userGroupsWebsite:
-                    logger.info(f"User has id 11 in list. Removing it.")
+                    logger.info(f"User has id 11 (NY Controller) in list. Removing it.")
                     try:
                         userGroupsWebsite.remove('11')
                     except error as e:
@@ -302,9 +302,9 @@ def updateUsers(ts3conn, conn):
                     logger.info("Removed id 11 successfully!")
 
                 # Add the 'Board Member' tag
-                if '17401' not in userGroupsWebsite:
+                if '17401' in userGroupsWebsite:
                     userGroupsWebsite.append('17401')
-                    logger.info(f"Sucessfully added id 17401 to user {userInfoWebsite['data']['cid']}")
+                    logger.info(f"Sucessfully added id 17401 (Board Member) to user {userInfoWebsite['data']['cid']}")
 
                 # Ignore server groups for 'KM'
                 # Check if user is KM and if he has the 'I1' tag if so, remove it and add C3.
