@@ -302,8 +302,9 @@ def updateUsers(ts3conn, conn):
                     logger.info("Removed id 11 successfully!")
 
                 # Add the 'Board Member' tag
-                userGroupsWebsite.append('17401')
-                logger.info(f"Sucessfully added id 17401 to user {userInfoWebsite['data']['cid']}")
+                if '17401' not in userGroupsWebsite:
+                    userGroupsWebsite.append('17401')
+                    logger.info(f"Sucessfully added id 17401 to user {userInfoWebsite['data']['cid']}")
 
                 # Ignore server groups for 'KM'
                 # Check if user is KM and if he has the 'I1' tag if so, remove it and add C3.
