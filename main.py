@@ -16,7 +16,9 @@ from common.init_logging import setup_logger
 
 # BEFORE YOU JUDGE THIS SCRIPT... I wrote it while drinking, i swear....
 # Test Comment Here
-# Total hours wasted on this script: 11 (as of 2024-01-15)
+# Total hours wasted on this script: 13 (as of 2024-01-23)
+# Update: 2024-01-15: HOLY FUCK TREVOR!? WHY DO WE DO THE SAME THING TWICE IN DIFFERENT BLOCKS???
+#                       YES it took me like 10 hours to realize that fact.
 
 # Get the logger
 logger = setup_logger(__name__)
@@ -36,7 +38,7 @@ updateCount = 0
 # Count failed updates
 failCount = 0
 
-# TS3 Server Group IDs - Trevor needs to explain this to me
+# TS3 Server Group IDs - This is the base group that is cloned to create each position group
 sourceGroup = 227
 
 # Database connection
@@ -81,7 +83,7 @@ def updatePos(ts3conn):
     positions = []
 
     # Dictionary of all TS3 groups
-    groups = {}
+    ts3_groups = {}
 
     # Dictionary of all online controllers
     onlineController = {}
@@ -90,7 +92,22 @@ def updatePos(ts3conn):
     trackedUsers = {}
 
     # Get the list of all online controllers from the ZNY website
-    positionInfo = requests.get(zny_web_instance + '/api/positions/online').json()
+    try:
+        positionResponse = requests.get(zny_web_instance + '/api/positions/online')
+        positionResponse.raise_for_status()  # Raises an error for 4xx or 5xx responses
+        if not positionResponse.content:
+            raise ValueError("Empty response received from positions API.")
+        positionInfo = positionResponse.json()
+    except requests.RequestException as e:
+        logger.error(f"Request failed: {e}")
+        raise
+    except ValueError as e:
+        logger.error(f"Invalid response: {e}")
+        raise
+    except json.JSONDecodeError as e:
+        logger.error(f"Failed to parse JSON response: {e}")
+        logger.error(f"Response content: {positionResponse.text}")
+        raise
 
     # Parse the list of online controllers
     for position in positionInfo['data']:
@@ -122,13 +139,13 @@ def updatePos(ts3conn):
 
     # Add all TS3 groups to the dictionary of groups
     for group in resp:
-        groups[group["name"]] = int(group["sgid"])
-    for group in groups:
+        ts3_groups[group["name"]] = int(group["sgid"])
+    for group in ts3_groups:
 
         if group in positions and group not in onlineController:
             try:
                 logger.info(f"Removing {group} from TS3 server group")
-                ts3conn.servergroupdel(sgid=groups[group], force=1)
+                ts3conn.servergroupdel(sgid=ts3_groups[group], force=1)
             except:
                 pass
 
@@ -137,11 +154,11 @@ def updatePos(ts3conn):
         logger.info(f"Currently tracked users: {trackedUsers[position]}")
         time.sleep(.1)
 
-        if position not in groups:
+        if position not in ts3_groups:
             resp = ts3conn.servergroupcopy(
                 ssgid=sourceGroup, tsgid=0, name=position, type_=1
             )
-            groups[position] = int(resp.parsed[0]["sgid"])
+            ts3_groups[position] = int(resp.parsed[0]["sgid"])
         for controller in onlineController[position]:
             logger.info(f"Current controller info: {controller}")
             resp = ts3conn.clientgetdbidfromuid(cluid=controller)
@@ -151,23 +168,23 @@ def updatePos(ts3conn):
                 logger.info(f"dibUser: {dibUser}")
                 logger.info(f"Add {controller} to {position}")
                 ts3conn.servergroupaddclient(
-                    sgid=groups[position], cldbid=dibUser
+                    sgid=ts3_groups[position], cldbid=dibUser
                 )
                 incrementUpdateCount()
             except:
-                logger.error(f"FAILED to add {controller} to {position}")
+                logger.error(f"FAILED to add '{position}' to {controller}")
                 incrementFailCount()
             finally:
                 trackedUsers[position].append(dibUser)
 
-        resp = ts3conn.servergroupclientlist(sgid=groups[position])
+        resp = ts3conn.servergroupclientlist(sgid=ts3_groups[position])
 
         for user in resp.parsed:
             logger.info(f"USER: {user}")
 
             if user["cldbid"] not in trackedUsers[position]:
                 ts3conn.servergroupdelclient(
-                    sgid=groups[position], cldbid=user["cldbid"]
+                    sgid=ts3_groups[position], cldbid=user["cldbid"]
                 )
                 incrementUpdateCount()
                 logger.info(f"Removed {user['cldbid']} from {position}")
@@ -188,8 +205,13 @@ def updateUsers(ts3conn, conn):
         :param clid: The client ID from TS3.
         :return:
         """
-        # give UID send mmessage to user (DONT RESEND FOR X TIME)
-        # This works. Only issue is you Laraval cant accept a slash in Unicode and treats it as a normal slash in the url. Instead we need to pass with a get param or within a post. I am down for either, Post may be easier as it allows it to forward through.
+
+        # give UID send message to user (DON'T RESEND FOR X TIME)
+        # This works. Only issue is you Laravel cant accept a slash in Unicode and treats it as a
+        # normal slash in the url.
+        # Instead, we need to pass with a get param or within a post. I am
+        # down for either, Post may be easier as it allows it to forward through.
+
         ts3conn.sendtextmessage(
             targetmode=1,
             target=clid,
@@ -266,16 +288,28 @@ def updateUsers(ts3conn, conn):
         userInfo = ts3conn.clientinfo(clid=user["clid"])
 
         if userInfo.parsed[0]["client_unique_identifier"] in allTeamspeakIds:
+
+            # Query the ZNY website API to get information about the user
+            # Including CID, isStaff, isBoardMember, and other tags
             userInfoWebsite = requests.get(
                 zny_web_instance + '/api/teamspeak/userinfo?uid={}'.format(
                     urllib.parse.quote_plus(userInfo.parsed[0]['client_unique_identifier']))).json()
+
             userGroupsTS = userInfo.parsed[0]['client_servergroups'].split(',')
             userGroupsTracked = list(set(groupsTracked) & set(userGroupsTS))
             userGroupsWebsite = userInfoWebsite['data']['tags']
+
+            # FIXME: Here we should handle normal users and deal with position tags
+
+
+            # Handle staff members
+            # If user is a staff member, remove the 'NY Controller' tag - we're not supposed
+            # to have both NY Controller and the Staff tag.
             if userInfoWebsite['data']['isStaff'] and '11' in userGroupsWebsite:
                 userGroupsWebsite.remove('11')
 
-            # If user is a board member
+            # If user is a board member, remove the 'NY Controller' tag and add the
+            # 'Board Member' tag instead.
             if userInfoWebsite['data']['isBoardMember']:
                 # Don't assign the "NY Controller" tag.
                 logger.info("Found a board member!")
@@ -287,7 +321,7 @@ def updateUsers(ts3conn, conn):
                     try:
                         userGroupsWebsite.remove('11')
                     except error as e:
-                        logger.info(f"Failed to remove tag 11. Error: {e}")
+                        logger.error(f"Failed to remove tag 11. Error: {e}")
                     logger.info("Removed id 11 successfully!")
 
                 # Add the 'Board Member' tag
@@ -302,10 +336,12 @@ def updateUsers(ts3conn, conn):
                     try:
                         userGroupsWebsite.remove('73')
                     except error as e:
-                        logger.info(f"Failed to remove group 73. Error: {e}")
+                        logger.error(f"Failed to remove group 73. Error: {e}")
+                        incrementFailCount()
 
                     userGroupsWebsite.append('72')
                     logger.info("Added group 72 instead.")
+                    incrementUpdateCount()
 
             userAddGroups = list(set(userGroupsWebsite) - set(userGroupsTracked))
             userRemoveGroups = list(set(userGroupsTracked) - set(userGroupsWebsite))
@@ -354,11 +390,6 @@ def lambda_handler(event, context):
                 "message": f"Ran successfully! {updateCount} updates were made. {failCount} failed.",
             }),
         }
-    except Error as e:
-        return {
-            "statusCode": 500,
-            "headers": {},
-            "body": json.dumps({
-                "message": f"Epic fail! {e}"
-            }),
-        }
+    except Exception as e:
+        # Instead of returning, raise an exception to signal failure
+        raise RuntimeError(f"Epic fail! {e}")
