@@ -117,15 +117,41 @@ def updatePos(ts3conn):
             onlineController[position['identifier']] = []
 
         # Get the user info for the controller from the ZNY website
-        userInfo = requests.get(
-            zny_web_instance + '/api/teamspeak/userIdentity?cid={}'.format(position['cid'])).json()
+        try:
+            user_info_response = requests.get(
+                zny_web_instance + '/api/teamspeak/userIdentity?cid={}'.format(position['cid']))
+            user_info_response.raise_for_status()
+            if not user_info_response.content:
+                raise ValueError("Empty response received from user info API.")
+            userInfo = user_info_response.json()
+        except requests.RequestException as e:
+            logger.error(f"Request failed: {e}")
+            raise
+        except ValueError as e:
+            logger.error(f"Invalid response: {e}")
+            raise
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse JSON response: {e}")
+            logger.error(f"Response content: {user_info_response.text}")
+            raise
+
 
         # Add the user to the position in the dictionary for that position
         for uid in userInfo:
             onlineController[position['identifier']].append(uid)
 
     # Connect to the database
-    conn = engine.connect()
+    try:
+        conn = engine.connect()
+    except Exception as e:
+        # Log the error with as much detail as possible
+        logger.error(f"Database connection failed: {e}")
+        # It might be beneficial to include the database URL, masking sensitive info
+        sanitized_db_url = re.sub(r'//(.*):(.*)@', '//***:***@', str(db))
+        logger.error(f"Failed to connect to database at {sanitized_db_url}")
+        # After logging, you might want to raise an exception to halt the execution
+        # or handle the error in a way that makes sense for your application
+        raise
 
     # Get the list of all positions from the database
     positionsAll = conn.execute(select([table])).fetchall()
