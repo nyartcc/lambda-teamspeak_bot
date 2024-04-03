@@ -8,6 +8,8 @@ import boto3
 import requests
 import ts3
 
+from botocore.exceptions import ClientError
+
 from sqlalchemy import MetaData
 from sqlalchemy import create_engine
 from sqlalchemy import select, insert, update
@@ -16,7 +18,7 @@ from common.init_logging import setup_logger
 
 # BEFORE YOU JUDGE THIS SCRIPT... I wrote it while drinking, i swear....
 # Test Comment Here
-# Total hours wasted on this script: 13 (as of 2024-01-23)
+# Total hours wasted on this script: 15 (as of 2024-01-23)
 # Update: 2024-01-15: HOLY FUCK TREVOR!? WHY DO WE DO THE SAME THING TWICE IN DIFFERENT BLOCKS???
 #                       YES it took me like 10 hours to realize that fact.
 
@@ -26,8 +28,47 @@ logger = setup_logger(__name__)
 # Get DEBUG environment variable
 DEBUG = os.environ.get("DEBUG", False)
 
+def get_secret():
+    """
+    Retrieves the database password from Secrets Manager.
+    """
+    secret_name = "prod/lambda/database_write"
+    region_name = "us-east-1"
+
+    # Create a Secrets Manager client
+    session = boto3.session.Session()
+    client = session.client(
+        service_name='secretsmanager',
+        region_name=region_name
+    )
+
+    try:
+        get_secret_value_response = client.get_secret_value(
+            SecretId=secret_name
+        )
+    except ClientError as e:
+        # For a list of exceptions thrown, see
+        # https://docs.aws.amazon.com/secretsmanager/latest/apireference/API_GetSecretValue.html
+        raise e
+
+    # Parse the JSON string into a Python dictionary
+    secret = json.loads(get_secret_value_response['SecretString'])
+
+    db_user = secret['username']
+    db_host = secret["host"]
+    db_name = "nyartcco_nyartcc"
+    db_pass = secret["password"]
+
+    db_string = f"mysql+pymysql://{db_user}:{db_pass}@{db_host}/{db_name}"
+
+    logger.info(f"Database connection string: mysql+pymysql://{db_user}:***@{db_host}/{db_name}")
+
+    return db_string
+
+
+
+
 # Get the environment variables
-db = os.environ["db4"]
 tsUsername = os.environ["tsUsername"]
 tsPass = os.environ["tsPass"]
 tsHostname = os.environ["tsHostname"]
@@ -42,7 +83,10 @@ failCount = 0
 sourceGroup = 227
 
 # Database connection
-engine = create_engine(db)
+
+db_string = get_secret()
+
+engine = create_engine(db_string)
 meta = MetaData(engine, reflect=True)
 table = meta.tables["callsigns"]
 table2 = meta.tables["online"]
@@ -52,6 +96,9 @@ ts_MessageLog = meta.tables["ts_message_log"]
 
 
 def incrementUpdateCount():
+    """
+    Increment the update count.
+    """
     global updateCount
     updateCount += 1
 
@@ -146,11 +193,14 @@ def updatePos(ts3conn):
     except Exception as e:
         # Log the error with as much detail as possible
         logger.error(f"Database connection failed: {e}")
-        # It might be beneficial to include the database URL, masking sensitive info
+
+        # Sanitize the database URL before logging it
         sanitized_db_url = re.sub(r'//(.*):(.*)@', '//***:***@', str(db))
+
+        # Log the sanitized database URL
         logger.error(f"Failed to connect to database at {sanitized_db_url}")
-        # After logging, you might want to raise an exception to halt the execution
-        # or handle the error in a way that makes sense for your application
+
+        # Raise the exception
         raise
 
     # Get the list of all positions from the database
