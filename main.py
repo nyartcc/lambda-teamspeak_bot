@@ -127,9 +127,13 @@ def fetch_vatsim_pilots():
     data = response.json()
     return {pilot['cid']: pilot for pilot in data['pilots']}
 
+tracked_users = {
+        '908962': 'kRhqR59V3/Ekbq1dpCr+QV8xAXo='
+    }
+
 def updatePilots(ts3conn, conn):
     """
-    Update pilot groups in Teamspeak based on active pilots from VATSIM.
+    Update pilot groups in Teamspeak based on active pilots from VATSIM that are tracked.
     """
     active_pilots = fetch_vatsim_pilots()  # Fetches current active pilots
 
@@ -137,30 +141,33 @@ def updatePilots(ts3conn, conn):
     ts3_groups = {group["name"]: int(group["sgid"]) for group in ts3conn.servergrouplist() if "Pilot_" in group["name"]}
 
     for cid, pilot in active_pilots.items():
-        pilot_callsign = pilot['callsign']
-        ts3uid = pilot['ts3uid']  # This assumes ts3uid is somehow retrieved or stored
+        if cid in tracked_users:
+            pilot_callsign = pilot['callsign']
+            ts3uid = tracked_users[cid]
+            group_name = f"Pilot_{pilot_callsign}"
+            if group_name not in ts3_groups:
+                # Create new group if not exists
+                resp = ts3conn.servergroupcopy(ssgid=sourceGroup, tsgid=0, name=group_name, type_=1)
+                ts3_groups[group_name] = int(resp.parsed[0]["sgid"])
 
-        group_name = f"Pilot_{pilot_callsign}"
-        if group_name not in ts3_groups:
-            # Create new group if not exists
-            resp = ts3conn.servergroupcopy(ssgid=sourceGroup, tsgid=0, name=group_name, type_=1)
-            ts3_groups[group_name] = int(resp.parsed[0]["sgid"])
-
-        try:
-            # Add the pilot to the respective group
-            dbid = ts3conn.clientgetdbidfromuid(cluid=ts3uid).parsed[0]["cldbid"]
-            ts3conn.servergroupaddclient(sgid=ts3_groups[group_name], cldbid=dbid)
-            logger.info(f"Added pilot {cid} ({pilot_callsign}) to {group_name}")
-            incrementUpdateCount()
-        except Exception as e:
-            logger.error(f"Failed to add/update pilot {cid} in TS3: {e}")
-            incrementFailCount()
+            try:
+                # Add the pilot to the respective group
+                dbid = ts3conn.clientgetdbidfromuid(cluid=ts3uid).parsed[0]["cldbid"]
+                ts3conn.servergroupaddclient(sgid=ts3_groups[group_name], cldbid=dbid)
+                logger.info(f"Added pilot {cid} ({pilot_callsign}) to {group_name}")
+                incrementUpdateCount()
+            except Exception as e:
+                logger.error(f"Failed to add/update pilot {cid} in TS3: {e}")
+                incrementFailCount()
+        else:
+            logger.info(f"Pilot {cid} not tracked. Skipping...")
 
     # Cleanup old pilot groups if no longer active
     for group_name, sgid in ts3_groups.items():
-        if group_name not in [f"Pilot_{p['callsign']}" for p in active_pilots.values()]:
+        if group_name not in [f"Pilot_{p['callsign']}" for p in active_pilots.values() if p['cid'] in tracked_users]:
             ts3conn.servergroupdel(sgid=sgid, force=1)
             logger.info(f"Deleted unused pilot group {group_name}")
+
 
 
 ### CONTROLLER BLOCK ###
