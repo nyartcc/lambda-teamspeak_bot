@@ -120,6 +120,13 @@ zny_web_instance = "https://nyartcc.org"
 
 
 ### PILOT BLOCK ###
+
+def fetch_vatsim_pilots():
+    """ Fetches active pilots from VATSIM data feed. """
+    response = requests.get('http://data.vatsim.net/v3/vatsim-data.json')
+    data = response.json()
+    return {pilot['cid']: pilot for pilot in data['pilots']}
+
 def updatePilots(ts3conn, conn):
     """
     Update pilot groups in Teamspeak based on active pilots from VATSIM.
