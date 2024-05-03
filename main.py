@@ -160,7 +160,7 @@ def updatePilots(ts3conn, conn):
                 logger.error(f"Failed to add/update pilot {cid} in TS3: {e}")
                 incrementFailCount()
         else:
-            logger.info(f"Pilot {cid} not tracked. Skipping...")
+            logger.debug(f"Pilot {cid} not tracked. Skipping...")
 
     # Cleanup old pilot groups if no longer active
     for group_name, sgid in ts3_groups.items():
